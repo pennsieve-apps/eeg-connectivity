@@ -66,9 +66,14 @@ extractor in that direction, not a reimplementation.
    `_events.tsv`), any BIDS-EEG dataset, or loose EDF/BDF/BrainVision/FIF/EEGLAB files, found
    recursively; the same reader as eeg-spectral (`EEG Fp1-Ref`, `Fp1-Avg` → `Fp1`; `T3/T4/T5/T6`
    → `T7/T8/P7/P8`; non-EEG channels and channels marked bad are left out; EDFs without a
-   physical dimension, as in ds003555, are read as µV).
+   physical dimension, as in ds003555, are read as µV). Ear and mastoid electrodes (A1, A2, M1,
+   M2; `EXCLUDE_CHANNELS`) are reference sites, not scalp positions, and are left out of every
+   estimate by default, together with any bipolar pair that contains them.
 2. **Reference.** Referential recordings are analysed in **average reference** over the channels
-   used (re-referenced in the app when the input is in another reference, with a note).
+   used (re-referenced in the app when the input is in another reference, with a note). The
+   rejection below sees the average over every selected channel; a channel it then drops is
+   taken out of the average for the estimates, so a noisy channel can influence which epochs are
+   rejected but not the connectivity values.
    **Bipolar-only recordings** (CHB-MIT, many clinical exports) cannot be turned back into
    electrodes, so connectivity is computed between the bipolar derivations, with a **warning**
    in `summary.json` and the log: neighbouring derivations share an electrode (Fp1-F7 and F7-T7
@@ -87,14 +92,17 @@ extractor in that direction, not a reimplementation.
    frequency bins of each band. wPLI (0–1) is |E[Im S<sub>xy</sub>]| / E[|Im S<sub>xy</sub>|] over
    epochs (each epoch's cross-spectrum averaged over the tapers first, as MNE-Connectivity does):
    1 = the phase of one channel consistently leads the other. imcoh is the
-   imaginary part of the coherency (signed, −1 to 1; the sign is the direction of the lag). The
+   imaginary part of the coherency (signed, −1 to 1): in `connectivity.csv` a **negative value
+   means `channel_a` leads `channel_b`** (each pair is listed once, `channel_a` first in the
+   recording's channel order). The
    epochs are streamed through the estimator one at a time, so memory does not grow with the
    recording.
 6. **Orthogonalised envelope correlation** (`aec`): each chunk of continuous analysable EEG is
    band-passed (4th-order Butterworth, zero phase) and Hilbert-transformed; MNE-Connectivity's
-   `envelope_correlation(orthogonalize="pairwise")` removes from each signal the part that is
-   in phase with the other before correlating their amplitude envelopes, over the kept epochs of
-   the chunk; values are averaged over chunks weighted by their length.
+   `envelope_correlation(orthogonalize="pairwise", log=True)` removes from each signal the part
+   that is in phase with the other and correlates the logarithms of the power envelopes (squared
+   amplitude envelopes), as Hipp et al. 2012 did, over the kept epochs of the chunk; values are
+   averaged over chunks weighted by their length.
 7. **Node strength**: the mean |connectivity| of a channel with every other channel (strength /
    (N − 1), so recordings with different channel counts can be compared).
 8. **Graph measures** (definitions of Rubinov & Sporns 2010, computed with NetworkX on |values|):
@@ -106,9 +114,12 @@ extractor in that direction, not a reimplementation.
    (C / C<sub>null</sub>) / (L / L<sub>null</sub>) (Humphries & Gurney 2008) against `N_NULL` (20)
    null networks with the same degree sequence (double edge swaps, Maslov & Sneppen 2002) and
    the same weights shuffled over the rewired edges; `density` = kept / possible edges.
-9. **Hemispheres**: `left` and `right` are the mean |connectivity| over pairs of channels within
-   the left and within the right hemisphere (midline channels left out; for bipolar pairs, a pair
-   whose two electrodes are on one side), `interhemispheric` over left-right pairs, and
+9. **Hemispheres**: only **homologous channel pairs present on both sides** count (Fp1/Fp2,
+   F7/F8, …; for bipolar recordings Fp1-F7/Fp2-F8, …), so both sides are averaged over the same
+   electrode positions: when a channel is bad or missing on one side, its mirror is left out too
+   (`hemisphere_pairs` and `hemisphere_unpaired` in `provenance.json`, and a note). `left` and
+   `right` are the mean |connectivity| over pairs of channels within the left and within the right
+   members of those pairs (midline channels left out), `interhemispheric` over left-right pairs, and
    `asymmetry` = (left − right) / (left + right): positive = more connectivity within the left
    hemisphere. This is a **sensor-level proxy** of the source-level, directed network asymmetry
    that Verhoeven et al. 2018 used to lateralise temporal lobe epilepsy; it is not their method.
@@ -136,6 +147,7 @@ extractor in that direction, not a reimplementation.
 | `REJECT` | `true` | automatic artifact rejection (above) |
 | `REJECT_UV` | `500` | peak-to-peak threshold per epoch (µV) |
 | `MAX_EPOCHS` | `0` | 0 = all artifact-free epochs; otherwise this many, spread evenly over the recording |
+| `EXCLUDE_CHANNELS` | `A1,A2,M1,M2` | electrodes left out of every estimate (with bipolar pairs containing them); `none` keeps all |
 | `FIGURES` | `true` | write the figures |
 | `CHUNK_S` | `60` | seconds read at a time |
 | `THREADS` | `0` | BLAS threads; 0 = from the container's CPU quota, capped by memory |
@@ -145,10 +157,10 @@ extractor in that direction, not a reimplementation.
 
 | File | Columns |
 |---|---|
-| `connectivity.csv` | recording_id, channel_a, channel_b, band, measure (`wpli`, `imcoh`, `aec`), value (each pair once) |
+| `connectivity.csv` | recording_id, channel_a, channel_b, band, measure (`wpli`, `imcoh`, `aec`), value (each pair once; imcoh < 0 when channel_a leads) |
 | `node_strength.csv` | recording_id, channel, band, measure, strength (mean \|value\| with every other channel) |
 | `graph.csv` | recording_id, band, measure, metric (`clustering`, `path_length`, `global_efficiency`, `modularity`, `small_worldness`, `density`), value |
-| `hemisphere.csv` | recording_id, band, measure, left, right, interhemispheric, asymmetry |
+| `hemisphere.csv` | recording_id, band, measure, left, right, interhemispheric, asymmetry (over homologous pairs present on both sides) |
 | `features.csv` | recording_id, channel, feature (`<measure>_<band>`, e.g. `wpli_alpha`: node strength), value |
 | `figures/<recording_id>_{matrix,edges,strength}.png` | connectivity matrix per band; strongest edges per band (circle plot); node-strength scalp maps |
 | `figures/asymmetry_overview.png` | hemispheric asymmetry per recording and band (when there is more than one recording) |
@@ -171,10 +183,10 @@ and, with `aec`, the band-pass filters (three to four times the wPLI-only time).
 | Synthetic fixture, Lambda-style (`--cpus 1`, read-only, uid 65534) | all | 2 (6 and 4 min) | 21 s | 312 MB |
 | eeg-prep's Siena derivative, sub-00 (`--cpus 2 --memory 3g`) | wpli | 5 runs, 35-44 min | 16 s | 332 MB |
 | the same | all | 5 runs | 70 s | 332 MB |
-| eeg-prep's Siena derivative, all of it (`--memory 2g`, four other apps running) | all | 41 runs, 0.6-13.5 h, 41 ok | 2472 s | 793 MB |
-| one 13.5 h run of it (sub-01 run-00, 19 channels, 256 Hz) | all | 1 | 176 s | (within the above) |
-| eeg-prep's CHB-MIT chb01 derivative (`--memory 2g`) | wpli | 42 x 1 h, 42 ok | 263 s | 396 MB |
-| eeg-prep's ds003555 derivative, 3 h sleep EEG (`--memory 2g`) | wpli | 3, 3 ok | 63 s | 936 MB |
+| eeg-prep's Siena derivative, all of it (`--memory 2g`, other apps running) | all | 41 runs, 0.6-13.5 h, 41 ok | 2569 s | 797 MB |
+| one 13.5 h run of it (sub-01 run-00, 19 channels, 256 Hz) | all | 1 | 259 s | (within the above) |
+| eeg-prep's CHB-MIT chb01 derivative (`--memory 2g`) | wpli | 42 x 1 h, 42 ok | 173 s | 389 MB |
+| eeg-prep's ds003555 derivative, 3 h sleep EEG (`--memory 2g`) | wpli | 3, 3 ok | 45 s | 831 MB |
 | CHB-MIT chb01_01/03/04, raw bipolar EDF + summary (first build) | all | 3 x 1 h | 62 s | 342 MB |
 | OpenNeuro ds003555 sub-01..03, raw BIDS at 1024 Hz (first build) | all | 3 | 422 s (89-185 s each) | 540 MB |
 
@@ -186,30 +198,35 @@ with all measures (30-40 min with other jobs sharing the machine); a single rout
 What it found:
 
 - **Synthetic fixture**: the planted 39 ms-lagged theta pair T7-O1 is the strongest theta edge
-  for all three measures (wPLI 0.90, imcoh -0.70, aec 0.73), and the 11.7 ms-lagged beta pair
-  F3-P7 the strongest beta edge (wPLI 0.63, imcoh -0.48, aec 0.69); the zero-lag copies stay at
-  the noise level (wPLI 0.08-0.17, |imcoh| < 0.03, aec < 0.07); the hemispheric asymmetry of
-  theta and beta is +0.21 to +0.83 (left), alpha and gamma within ±0.11; on the bipolar-only
+  for all three measures (wPLI 0.90, imcoh -0.70 with T7 as channel_a, i.e. T7 leads, as
+  planted; aec 0.55), and the 11.7 ms-lagged beta pair F3-P7 the strongest beta edge (wPLI 0.63,
+  imcoh -0.48, aec 0.53); the zero-lag copies stay at the noise level (wPLI 0.08-0.17, |imcoh| <
+  0.03, aec < 0.06); the hemispheric asymmetry of theta and beta is +0.16 to +0.83 (left), alpha,
+  delta and gamma within ±0.15; on the bipolar-only
   variant the strongest theta edge links a T7-containing and an O1-containing pair (wPLI 0.91).
   With `EXCLUDE_SEIZURE=false` the planted right-hemisphere seizure raises right theta wPLI, so
   leaving seizures out matters.
 - **Siena** (eeg-prep derivative, 41 runs of 14 adults with focal epilepsy): 2.8 % of epochs
   rejected in the median run (42 % in the worst); median wPLI over all pairs 0.21 in theta and
   0.22 in alpha, 0.12-0.18 in the other bands; wPLI small-worldness 0-2.5 (median 0.89), i.e.
-  thresholded 19-channel sensor networks are not clearly small-world.
+  thresholded 19-channel sensor networks are not clearly small-world. Hemisphere means use the 8
+  homologous pairs in 36 runs; in 5 a bad channel took its mirror out (e.g. sub-00 run-04: T7 bad,
+  so T8 left out; its alpha wPLI asymmetry is −0.16 with matched pairs, −0.15 before, so that
+  asymmetry was not caused by the unmatched channel).
 - **Exploratory lateralisation check on Siena** (not a validation): for the 13 patients whose
   annotated seizure channels are on one side (9 left, 4 right; sub-10 bilateral), the sign of the
   mean within-hemisphere asymmetry per patient matched the seizure side in 4-8 of 13 patients
-  depending on measure and band (wPLI: delta 5, theta 4, alpha 4, beta 7, gamma 7; imcoh 4-8;
-  aec 6-7): **chance level**. The sensor-level asymmetry does not lateralise these patients, and
+  depending on measure and band (wPLI: delta 5, theta 4, alpha 4, beta 6, gamma 7; imcoh 4-8;
+  aec 5-7): **chance level** (`validation/siena_side.py`). The sensor-level asymmetry does not lateralise these patients, and
   must not be read as a lateralising sign.
 - **CHB-MIT chb01** (eeg-prep derivative of all 42 hours, bipolar only): 42 of 42 ok with the
   bipolar warning, 21 derivations (eeg-prep drops the reversed duplicate `P7-T7` and the `T8-P8-1`
-  copy). 36 % of epochs rejected in the median hour (67 % in the worst): eeg-prep cannot run ICA on
+  copy); `T7-FT9` and `FT10-T8` (stored the other way round) count as a homologous pair. 36 % of epochs rejected in the median hour (67 % in the worst): eeg-prep cannot run ICA on
   bipolar-only data (no electrode positions), so eye blinks in the frontal derivations remain and
   exceed `REJECT_UV` or the muscle test; some hours also lose Fp1-F7 and Fp1-F3 as noisy.
-- **ds003555** (eeg-prep derivative): 3 of 3 ok in average reference; 2.5 % of epochs rejected in the
-  median child, 63 % in sub-01 (artifact-rich; on the raw files it also lost Pz).
+- **ds003555** (eeg-prep derivative): 3 of 3 ok in average reference, A1/A2 left out; 2.7 % of
+  epochs rejected in the median child, 60 % in sub-01 (artifact-rich; on the raw files it also lost
+  Pz). wPLI is implausibly high across all pairs in sub-01 and sub-03 (see Limitations).
 
 Outputs on the demo data are in
 `workflow-scalp-eeg/data/work/{siena,chbmit,ds003555}/eeg-connectivity/`, all on eeg-prep's
@@ -241,6 +258,15 @@ final derivatives (Siena with all measures, CHB-MIT and ds003555 with the defaul
   small-world organisation.
 - The envelope correlation is computed on 4 s epochs grouped by 60 s chunk; slow (delta) envelopes
   are poorly sampled by short segments, so delta `aec` is noisy.
+- **ds003555 shows implausibly high wPLI across all channel pairs** in two of the three children
+  (mean alpha wPLI over all pairs 0.58 in sub-01 and 0.70 in sub-03, against 0.14 in sub-02 and
+  about 0.2 on Siena), on eeg-prep's derivative and on the raw OpenNeuro EDFs alike, and with the
+  ear electrodes left out. A consistent small phase lag between most channels points to the
+  recording (a lagged or filtered reference, or a timing skew between channels) rather than the
+  brain; the cross-spectral phase did not follow the channel order, so it is not a simple
+  multiplexer skew. We could not explain it: do not interpret connectivity values of these
+  recordings, and check any new dataset for a uniformly high wPLI floor before comparing it with
+  others.
 
 ## Licences
 
@@ -324,6 +350,9 @@ Goldberger et al. 2000 together with each database.
     make run                                  # Docker over data/fixture/eeg -> data/output/ (all measures, dev.env)
     make lambda-check                         # read-only image, uid 65534, HOME/TMPDIR under /tmp
     make run-demo DEMO=../workflow-scalp-eeg/data/work/siena/eeg-prep/eeg
+
+`validation/siena_side.py` reproduces the exploratory Siena check of the hemispheric asymmetry
+against the side of the annotated seizures.
 
 The fixture (`tests/make_fixture.py`, also the release review's input) plants, on a 1/f
 background: a 5–7 Hz source on T7 repeated 39 ms later on O1 and a 16–24 Hz source on F3 repeated
