@@ -1,0 +1,190 @@
+# yaml-language-server: $schema=https://schemas.pennsieve.io/app-manifest/v1.json
+schemaVersion: "1.0"
+application:
+  name: Scalp EEG Functional Connectivity
+  description: >-
+    Sensor-space functional connectivity of clinical scalp EEG (routine or long-term video-EEG),
+    computed with mne-connectivity on 4 s artifact-free epochs outside seizures, per frequency band
+    (delta, theta, alpha, beta, gamma): the weighted phase lag index (wPLI, default; Vinck et al.
+    2011), the imaginary part of coherency (Nolte et al. 2004) and the orthogonalised amplitude
+    envelope correlation (Hipp et al. 2012), all insensitive to the zero-lag coupling that volume
+    conduction and a shared reference produce. Node strength per channel; graph measures with
+    networkx (Rubinov & Sporns 2010: weighted clustering, path length, global efficiency, Louvain
+    modularity, small-worldness against degree-preserving null networks) on proportionally
+    thresholded networks; hemispheric means and asymmetry, a sensor-level proxy of the network
+    asymmetry studied in temporal lobe epilepsy (Verhoeven et al. 2018). Figures with captions:
+    connectivity matrix per band, circle plot of the strongest edges, node-strength scalp maps.
+    Reads the eeg-prep derivative, any BIDS-EEG dataset or loose EDF files; referential recordings
+    are analysed in average reference, bipolar-only recordings on their pairs with a warning.
+    Research outputs, to be reviewed by a clinician.
+  type: processor
+  tags:
+    - eeg
+    - scalp-eeg
+    - electrophysiology
+    - epilepsy
+    - neurology
+    - neuroscience
+    - connectivity
+    - functional-connectivity
+    - biomarkers
+    - wpli
+    - graph-theory
+    - asymmetry
+runtime:
+  # One recording at a time, read in 60 s chunks (twice); memory does not grow with the length of
+  # the recording. Measured in Docker (amd64 emulation on an M-series Mac, --cpus 2 --memory 3g)
+  # on eeg-prep's Siena derivative, CHB-MIT chb01 and ds003555 (README "Runtime"). Mostly
+  # single-threaded.
+  cpu: 1024
+  memory: 2048
+  computeTypes:
+    - standard
+  timeoutSeconds: 7200
+parameters:
+  - name: MEASURES
+    type: string
+    label: Measures
+    description: >-
+      Comma-separated connectivity measures: wpli (weighted phase lag index), imcoh (imaginary part
+      of coherency), aec (orthogonalised amplitude envelope correlation), or all. The first one is
+      shown in the figures and the summary. wpli alone is the fastest; aec makes a run three to four times longer.
+    defaultValue: wpli
+  - name: BANDS
+    type: string
+    label: Bands
+    description: >-
+      conventions (delta 1-4, theta 4-8, alpha 8-13, beta 13-30, gamma 30-45 Hz, as eeg-spectral) or
+      a JSON object such as {"theta": [4, 8], "alpha": [8, 13]}. Bands reaching above 90 % of the
+      Nyquist frequency are left out.
+    defaultValue: conventions
+  - name: EPOCH_S
+    type: number
+    label: Epoch (s)
+    description: Length of each epoch (one trial of the connectivity estimate); epochs do not overlap.
+    defaultValue: 4
+    min: 1
+  - name: DENSITY
+    type: number
+    label: Graph density
+    description: >-
+      Proportion of the strongest connections kept for the graph measures (proportional
+      threshold), e.g. 0.2 keeps the strongest 20 % of all channel pairs.
+    defaultValue: 0.2
+    min: 0.01
+    max: 1
+  - name: N_NULL
+    type: integer
+    label: Null networks
+    description: Number of degree-preserving rewired networks small-worldness is compared against (0 = no small-worldness).
+    defaultValue: 20
+    min: 0
+  - name: SEED
+    type: integer
+    label: Random seed
+    description: Seed of the null-network rewiring and the Louvain modularity, for reproducible results.
+    defaultValue: 42
+  - name: TOP_EDGES
+    type: integer
+    label: Edges in circle plot
+    description: Number of strongest connections drawn per band in the circle plot.
+    defaultValue: 20
+    min: 1
+  - name: EXCLUDE_SEIZURE
+    type: boolean
+    label: Leave out seizures
+    description: Leave annotated seizures (and SEIZURE_MARGIN_S around them) out of every estimate.
+    defaultValue: true
+  - name: SEIZURE_MARGIN_S
+    type: number
+    label: Seizure margin (s)
+    description: Seconds left out before each seizure onset and after its end (to the end of the recording when the end is unknown).
+    defaultValue: 60
+    min: 0
+  - name: REJECT
+    type: boolean
+    label: Automatic artifact rejection
+    description: >-
+      Leave out epochs with a channel above REJECT_UV peak-to-peak or flat, or with muscle bursts
+      (on top of the bad_segment and artifact events eeg-prep wrote), and channels that are flat or
+      noisy in most of the recording (as eeg-spectral).
+    defaultValue: true
+  - name: REJECT_UV
+    type: number
+    label: Rejection threshold (µV)
+    description: Peak-to-peak amplitude in an epoch above which the epoch is left out.
+    defaultValue: 500
+    min: 1
+  - name: MAX_EPOCHS
+    type: integer
+    label: Most epochs
+    description: >-
+      0 = use every artifact-free epoch; otherwise this many, spread evenly over the recording
+      (a cap on the run time of very long recordings).
+    defaultValue: 0
+    min: 0
+  - name: EXCLUDE_CHANNELS
+    type: string
+    label: Channels left out
+    description: >-
+      Comma-separated electrodes left out of every estimate, with any bipolar pair that contains
+      them: by default the ear and mastoid electrodes (A1, A2, M1, M2), which are reference sites
+      rather than scalp positions. none = keep every EEG channel.
+    defaultValue: "A1,A2,M1,M2"
+  - name: FIGURES
+    type: boolean
+    label: Figures
+    description: Write three figures per recording (connectivity matrices, strongest edges, node-strength maps) and an asymmetry overview.
+    defaultValue: true
+  - name: CHUNK_S
+    type: number
+    label: Chunk (s)
+    description: Seconds of signal read at a time.
+    defaultValue: 60
+    min: 5
+  - name: THREADS
+    type: integer
+    label: Threads
+    description: BLAS threads; 0 = from the container's CPU quota, capped by its memory.
+    defaultValue: 0
+    min: 0
+  - name: LABEL
+    type: string
+    label: Output subfolder
+    description: When set, results go to OUTPUT_DIR/eeg-connectivity/<LABEL>/ (for a workflow that runs this step twice).
+    defaultValue: ""
+inputs:
+  - name: eeg
+    description: >-
+      The eeg-prep BIDS-EEG derivative (recordings.csv, *_desc-preproc_eeg.edf with _channels.tsv
+      and _events.tsv), any BIDS-EEG dataset, or loose EDF/EDF+/BDF/BrainVision/FIF/EEGLAB files
+      (referential or bipolar). Found anywhere under the input folder.
+    mediaTypes:
+      - application/edf
+      - text/csv
+      - text/tab-separated-values
+      - application/json
+      - application/octet-stream
+    placement: subfolder
+    required: true
+outputs:
+  - name: connectivity
+    description: >-
+      eeg-connectivity/: connectivity.csv (recording_id, channel_a, channel_b, band, measure, value),
+      node_strength.csv, graph.csv, hemisphere.csv, features.csv (recording_id, channel, feature,
+      value; <measure>_<band> node strength), figures/*.png, summary.json (headline numbers and
+      captioned figures for eeg-report) and provenance.json.
+    mediaTypes:
+      - text/csv
+      - application/json
+      - image/png
+
+# How a release is tested before it is made public: the inputs a review run uses.
+# See app-deploy-service docs/app-manifest-review.md.
+review:
+  version: 1
+  inputs:
+    eeg:
+      generate:
+        command: python -m tests.make_fixture "$REVIEW_INPUT_DIR"
+        root: eeg

@@ -1,0 +1,45 @@
+# Runtime dependencies, resolved on python:3.12.16-slim-bookworm (linux/amd64) and installed with
+# --no-deps --only-binary=:all: (every package is listed here, wheels only).
+# mne-connectivity: wPLI, imaginary coherence (spectral_connectivity_epochs) and orthogonalised
+# envelope correlation (envelope_correlation).
+mne-connectivity==0.9.0
+# networkx: graph measures (not bctpy, which is GPL-3.0).
+networkx==3.7
+# MNE-Python: reads EDF/BDF/BrainVision/FIF/EEGLAB lazily, a chunk at a time; multitaper; topomaps.
+mne==1.13.2
+numpy==2.5.4
+scipy==1.18.1
+matplotlib==3.11.2
+# required by mne-connectivity at import time
+pandas==3.1.1
+xarray==2026.9.0
+scikit-learn==1.9.1
+joblib==1.6.0
+threadpoolctl==3.8.0
+cloudpickle==3.1.2
+narwhals==2.28.0
+tzdata==2026.6
+# mne-connectivity also declares netCDF4 (and through it cftime) for saving connectivity objects to
+# netCDF files; this app never does, and both are left out (the tests run without them).
+# dependencies of the above
+contourpy==1.4.0
+cycler==0.12.1
+decorator==5.3.1
+fonttools==4.68.0
+Jinja2==3.1.6
+kiwisolver==1.5.1
+lazy-loader==0.6
+MarkupSafe==3.0.4
+packaging==26.3
+pillow==13.0.0
+platformdirs==4.14.5
+pooch==1.9.0
+pyparsing==3.3.3
+python-dateutil==4.0.0
+requests==2.34.2
+certifi==2026.10.23
+charset-normalizer==3.5.2
+idna==3.20
+urllib3==2.8.0
+six==1.17.0
+tqdm==4.70.1

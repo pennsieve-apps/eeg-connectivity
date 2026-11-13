@@ -1,0 +1,458 @@
+cff-version: 1.2.0
+message: If you use this app, please cite it and the works it builds on, listed under references.
+type: software
+title: eeg-connectivity
+abstract: Sensor-space functional connectivity of clinical scalp EEG (routine and long-term video-EEG), one step of the
+  Scalp EEG Interictal Biomarkers workflow. The weighted phase lag index (default) and the imaginary part of coherency
+  (mne-connectivity spectral_connectivity_epochs, multitaper, 4 s artifact-free epochs outside seizures) and the
+  orthogonalised amplitude envelope correlation (mne-connectivity envelope_correlation) per frequency band, all
+  insensitive to zero-lag volume conduction; node strength; graph measures with networkx (weighted clustering,
+  characteristic path length, global efficiency, Louvain modularity, small-worldness against degree-preserving null
+  networks) on proportionally thresholded networks; hemispheric means and asymmetry as a sensor-level proxy of the
+  network asymmetry studied in temporal lobe epilepsy. Works on referential recordings (in average reference) and on
+  bipolar-only recordings (with a warning). Research outputs, to be reviewed by a clinician.
+authors:
+- name: Pennsieve (University of Pennsylvania)
+contact:
+- given-names: Joost
+  family-names: Wagenaar
+  orcid: https://orcid.org/0009-0004-5925-5451
+  affiliation: University of Pennsylvania
+repository-code: https://github.com/pennsieve-apps/eeg-connectivity
+license: Apache-2.0
+keywords:
+- eeg
+- scalp-eeg
+- electrophysiology
+- epilepsy
+- neurology
+- connectivity
+- functional-connectivity
+- wpli
+- imaginary-coherence
+- envelope-correlation
+- graph-theory
+- biomarkers
+- asymmetry
+references:
+- type: software
+  title: MNE-Connectivity
+  authors:
+  - family-names: Binns
+    given-names: Thomas S
+  - family-names: Li
+    given-names: Adam
+  - family-names: Larson
+    given-names: Eric
+  - family-names: McCloy
+    given-names: Daniel
+  - family-names: Rockhill
+    given-names: Alex
+  - family-names: Li
+    given-names: Qianliang
+  - family-names: Ruuskanen
+    given-names: Santeri
+  - family-names: Kroner
+    given-names: Alexander
+  - family-names: Gramfort
+    given-names: Alexandre
+  - family-names: Marraffini
+    given-names: Giovanni Franco Gabriel
+  - family-names: Shor
+    given-names: Jonathan
+  - family-names: Marshall
+    given-names: Kenji
+  - family-names: Orabe
+    given-names: Mohammad
+  - family-names: Gerster
+    given-names: Moritz
+  - family-names: Stevenson
+    given-names: Rebecca F
+  - family-names: Köhler
+    given-names: Richard M
+  - family-names: Steingold
+    given-names: Sam
+  - family-names: Mert
+    given-names: Sezan
+  version: 0.9.0
+  year: 2026
+  doi: 10.5281/zenodo.10278399
+  repository-code: https://github.com/mne-tools/mne-connectivity
+  license: BSD-3-Clause
+- type: software
+  title: NetworkX
+  authors:
+  - name: NetworkX Developers
+  version: '3.7'
+  repository-code: https://github.com/networkx/networkx
+  license: BSD-3-Clause
+- type: article
+  title: An improved index of phase-synchronization for electrophysiological data in the presence of volume-conduction, noise and sample-size bias
+  authors:
+  - family-names: Vinck
+    given-names: Martin
+  - family-names: Oostenveld
+    given-names: Robert
+  - family-names: van Wingerden
+    given-names: Marijn
+  - family-names: Battaglia
+    given-names: Franscesco
+  - family-names: Pennartz
+    given-names: Cyriel M.A.
+  year: 2011
+  journal: NeuroImage
+  volume: 55
+  issue: '4'
+  start: '1548'
+  end: '1565'
+  doi: 10.1016/j.neuroimage.2011.01.055
+  identifiers:
+  - type: other
+    value: '21276857'
+- type: article
+  title: Identifying true brain interaction from EEG data using the imaginary part of coherency
+  authors:
+  - family-names: Nolte
+    given-names: Guido
+  - family-names: Bai
+    given-names: Ou
+  - family-names: Wheaton
+    given-names: Lewis
+  - family-names: Mari
+    given-names: Zoltan
+  - family-names: Vorbach
+    given-names: Sherry
+  - family-names: Hallett
+    given-names: Mark
+  year: 2004
+  journal: Clinical Neurophysiology
+  volume: 115
+  issue: '10'
+  start: '2292'
+  end: '2307'
+  doi: 10.1016/j.clinph.2004.04.029
+  identifiers:
+  - type: other
+    value: '15351371'
+- type: article
+  title: Large-scale cortical correlation structure of spontaneous oscillatory activity
+  authors:
+  - family-names: Hipp
+    given-names: Joerg F
+  - family-names: Hawellek
+    given-names: David J
+  - family-names: Corbetta
+    given-names: Maurizio
+  - family-names: Siegel
+    given-names: Markus
+  - family-names: Engel
+    given-names: Andreas K
+  year: 2012
+  journal: Nature Neuroscience
+  volume: 15
+  issue: '6'
+  start: '884'
+  end: '890'
+  doi: 10.1038/nn.3101
+  identifiers:
+  - type: other
+    value: '22561454'
+- type: article
+  title: 'Complex network measures of brain connectivity: Uses and interpretations'
+  authors:
+  - family-names: Rubinov
+    given-names: Mikail
+  - family-names: Sporns
+    given-names: Olaf
+  year: 2010
+  journal: NeuroImage
+  volume: 52
+  issue: '3'
+  start: '1059'
+  end: '1069'
+  doi: 10.1016/j.neuroimage.2009.10.003
+  identifiers:
+  - type: other
+    value: '19819337'
+- type: article
+  title: Automated diagnosis of temporal lobe epilepsy in the absence of interictal spikes
+  authors:
+  - family-names: Verhoeven
+    given-names: Thibault
+  - family-names: Coito
+    given-names: Ana
+  - family-names: Plomp
+    given-names: Gijs
+  - family-names: Thomschewski
+    given-names: Aljoscha
+  - family-names: Pittau
+    given-names: Francesca
+  - family-names: Trinka
+    given-names: Eugen
+  - family-names: Wiest
+    given-names: Roland
+  - family-names: Schaller
+    given-names: Karl
+  - family-names: Michel
+    given-names: Christoph
+  - family-names: Seeck
+    given-names: Margitta
+  - family-names: Dambre
+    given-names: Joni
+  - family-names: Vulliemoz
+    given-names: Serge
+  - family-names: van Mierlo
+    given-names: Pieter
+  year: 2018
+  journal: 'NeuroImage: Clinical'
+  volume: 17
+  start: '10'
+  end: '15'
+  doi: 10.1016/j.nicl.2017.09.021
+  identifiers:
+  - type: other
+    value: '29527470'
+- type: article
+  title: MEG and EEG data analysis with MNE-Python
+  authors:
+  - family-names: Gramfort
+    given-names: Alexandre
+  - family-names: Luessi
+    given-names: Martin
+  - family-names: Larson
+    given-names: Eric
+  - family-names: Engemann
+    given-names: Denis A.
+  - family-names: Strohmeier
+    given-names: Daniel
+  - family-names: Brodbeck
+    given-names: Christian
+  - family-names: Goj
+    given-names: Roman
+  - family-names: Jas
+    given-names: Mainak
+  - family-names: Brooks
+    given-names: Teon
+  - family-names: Parkkonen
+    given-names: Lauri
+  - family-names: Hämäläinen
+    given-names: Matti
+  year: 2013
+  journal: Frontiers in Neuroscience
+  volume: 7
+  start: '267'
+  doi: 10.3389/fnins.2013.00267
+  identifiers:
+  - type: other
+    value: '24431986'
+- type: conference-paper
+  title: Exploring Network Structure, Dynamics, and Function using NetworkX
+  authors:
+  - family-names: Hagberg
+    given-names: Aric A.
+  - family-names: Schult
+    given-names: Daniel A.
+  - family-names: Swart
+    given-names: Pieter J.
+  year: 2008
+  conference:
+    name: Proceedings of the Python in Science Conference
+  collection-title: Proceedings of the Python in Science Conference
+  start: '11'
+  end: '15'
+  doi: 10.25080/TCWV9851
+- type: article
+  title: Fast unfolding of communities in large networks
+  authors:
+  - family-names: Blondel
+    given-names: Vincent D
+  - family-names: Guillaume
+    given-names: Jean-Loup
+  - family-names: Lambiotte
+    given-names: Renaud
+  - family-names: Lefebvre
+    given-names: Etienne
+  year: 2008
+  journal: 'Journal of Statistical Mechanics: Theory and Experiment'
+  volume: 2008
+  issue: '10'
+  start: 'P10008'
+  doi: 10.1088/1742-5468/2008/10/P10008
+- type: article
+  title: Intensity and coherence of motifs in weighted complex networks
+  authors:
+  - family-names: Onnela
+    given-names: Jukka-Pekka
+  - family-names: Saramäki
+    given-names: Jari
+  - family-names: Kertész
+    given-names: János
+  - family-names: Kaski
+    given-names: Kimmo
+  year: 2005
+  journal: Physical Review E
+  volume: 71
+  issue: '6'
+  start: '065103'
+  doi: 10.1103/PhysRevE.71.065103
+  identifiers:
+  - type: other
+    value: '16089800'
+- type: article
+  title: Specificity and Stability in Topology of Protein Networks
+  authors:
+  - family-names: Maslov
+    given-names: Sergei
+  - family-names: Sneppen
+    given-names: Kim
+  year: 2002
+  journal: Science
+  volume: 296
+  issue: '5569'
+  start: '910'
+  end: '913'
+  doi: 10.1126/science.1065103
+  identifiers:
+  - type: other
+    value: '11988575'
+- type: article
+  title: 'Network ‘Small-World-Ness’: A Quantitative Method for Determining Canonical Network Equivalence'
+  authors:
+  - family-names: Humphries
+    given-names: Mark D.
+  - family-names: Gurney
+    given-names: Kevin
+  year: 2008
+  journal: PLoS ONE
+  volume: 3
+  issue: '4'
+  start: 'e0002051'
+  doi: 10.1371/journal.pone.0002051
+  identifiers:
+  - type: other
+    value: '18446219'
+- type: data
+  title: Siena Scalp EEG Database
+  authors:
+  - family-names: Detti
+    given-names: Paolo
+  year: 2020
+  version: 1.0.0
+  publisher:
+    name: PhysioNet
+  doi: 10.13026/5d4a-j060
+- type: article
+  title: 'EEG Synchronization Analysis for Seizure Prediction: A Study on Data of Noninvasive Recordings'
+  authors:
+  - family-names: Detti
+    given-names: Paolo
+  - family-names: Vatti
+    given-names: Giampaolo
+  - family-names: Zabalo Manrique de Lara
+    given-names: Garazi
+  year: 2020
+  journal: Processes
+  volume: 8
+  issue: '7'
+  start: '846'
+  doi: 10.3390/pr8070846
+- type: data
+  title: BIDS Siena Scalp EEG Database
+  authors:
+  - family-names: Dan
+    given-names: Jonathan
+  - family-names: Detti
+    given-names: Paolo
+  year: 2024
+  version: v1.0.0
+  publisher:
+    name: EPFL
+  doi: 10.5281/zenodo.10640762
+- type: article
+  title: PhysioBank, PhysioToolkit, and PhysioNet
+  authors:
+  - family-names: Goldberger
+    given-names: Ary L.
+  - family-names: Amaral
+    given-names: Luis A. N.
+  - family-names: Glass
+    given-names: Leon
+  - family-names: Hausdorff
+    given-names: Jeffrey M.
+  - family-names: Ivanov
+    given-names: Plamen Ch.
+  - family-names: Mark
+    given-names: Roger G.
+  - family-names: Mietus
+    given-names: Joseph E.
+  - family-names: Moody
+    given-names: George B.
+  - family-names: Peng
+    given-names: Chung-Kang
+  - family-names: Stanley
+    given-names: H. Eugene
+  year: 2000
+  journal: Circulation
+  volume: 101
+  issue: '23'
+  start: e215
+  doi: 10.1161/01.CIR.101.23.e215
+  identifiers:
+  - type: other
+    value: '10851218'
+- type: data
+  title: CHB-MIT Scalp EEG Database
+  authors:
+  - family-names: Shoeb
+    given-names: Ali
+  year: 2010
+  publisher:
+    name: PhysioNet
+  doi: 10.13026/C2K01R
+- type: thesis
+  title: Application of machine learning to epileptic seizure onset detection and treatment
+  authors:
+  - family-names: Shoeb
+    given-names: Ali Hossam
+  year: 2009
+  institution:
+    name: Massachusetts Institute of Technology
+  url: https://dspace.mit.edu/handle/1721.1/54669
+- type: data
+  title: Dataset of EEG recordings of pediatric patients with epilepsy based on the 10-20 system
+  authors:
+  - name: Dorottya Cserpan
+  - name: Ece Boran
+  - name: Richard Rosch
+  - name: San Pietro Lo Biundo
+  - name: Georgia Ramantani
+  - name: Johannes Sarnthein
+  year: 2021
+  version: 1.0.1
+  publisher:
+    name: OpenNeuro
+  doi: 10.18112/openneuro.ds003555.v1.0.1
+- type: article
+  title: Scalp high-frequency oscillation rates are higher in younger children
+  authors:
+  - family-names: Cserpan
+    given-names: Dorottya
+  - family-names: Boran
+    given-names: Ece
+  - family-names: Lo Biundo
+    given-names: Santo Pietro
+  - family-names: Rosch
+    given-names: Richard
+  - family-names: Sarnthein
+    given-names: Johannes
+  - family-names: Ramantani
+    given-names: Georgia
+  year: 2021
+  journal: Brain Communications
+  volume: 3
+  issue: '2'
+  start: fcab052
+  doi: 10.1093/braincomms/fcab052
+  identifiers:
+  - type: other
+    value: '33870193'
