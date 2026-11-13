@@ -102,7 +102,7 @@ BIPOLAR_WARNING = (
 DEFAULTS = {
     "MEASURES": "wpli", "BANDS": "conventions", "EPOCH_S": "4", "DENSITY": "0.2", "N_NULL": "20", "SEED": "42",
     "TOP_EDGES": "20", "EXCLUDE_SEIZURE": "true", "SEIZURE_MARGIN_S": "60", "REJECT": "true", "REJECT_UV": "500",
-    "MAX_EPOCHS": "0", "FIGURES": "true", "CHUNK_S": "60", "THREADS": "0", "LABEL": "",
+    "MAX_EPOCHS": "0", "EXCLUDE_CHANNELS": "A1,A2,M1,M2", "FIGURES": "true", "CHUNK_S": "60", "THREADS": "0", "LABEL": "",
 }
 
 HEADERS = {
@@ -150,7 +150,9 @@ def read_params(env=os.environ) -> tuple[dict, W.WindowParams, dict]:
                  "top_edges": int(raw["TOP_EDGES"]), "max_epochs": int(raw["MAX_EPOCHS"]),
                  "exclude_seizure": _bool("EXCLUDE_SEIZURE", raw["EXCLUDE_SEIZURE"]),
                  "margin_s": float(raw["SEIZURE_MARGIN_S"]), "figures": _bool("FIGURES", raw["FIGURES"]),
-                 "label": raw["LABEL"].strip()}
+                 "label": raw["LABEL"].strip(),
+                 "exclude_channels": [] if raw["EXCLUDE_CHANNELS"].strip().lower() in ("none", "-") else
+                 [c.strip() for c in raw["EXCLUDE_CHANNELS"].split(",") if c.strip()]}
         int(raw["THREADS"])
     except (TypeError, ValueError) as e:
         raise ValueError(str(e)) from None
@@ -160,6 +162,10 @@ def read_params(env=os.environ) -> tuple[dict, W.WindowParams, dict]:
         raise ValueError("N_NULL and MAX_EPOCHS must be >= 0, TOP_EDGES >= 1")
     if other["margin_s"] < 0:
         raise ValueError("SEIZURE_MARGIN_S must be >= 0")
+    for c in other["exclude_channels"]:
+        if C.electrode(c) is None:
+            raise ValueError(f"EXCLUDE_CHANNELS: {c!r} is not a 10-20/10-10 electrode name")
+    other["exclude_channels"] = [C.electrode(c) for c in other["exclude_channels"]]
     if other["label"] and not all(c.isalnum() or c in "-_" for c in other["label"]):
         raise ValueError("LABEL: letters, digits, - and _ only")
     if min(b[1] for b in other["bands"]) < 2.0 / wp.epoch_s:
@@ -190,8 +196,9 @@ def num(x, nd: int = 4):
 # --------------------------------------------------------------------------- channels and montage
 # (as eeg-spectral)
 
-def select_channels(raw_names: list[str], rec: I.Recording):
-    """(raw indices, canonical names, contacts by name, montage, reference, notes)."""
+def select_channels(raw_names: list[str], rec: I.Recording, exclude: list[str] = ()):
+    """(raw indices, canonical names, contacts by name, montage, reference, notes). Channels with a
+    contact in `exclude` (EXCLUDE_CHANNELS: ear and mastoid electrodes by default) are left out."""
     montage, mapping, reference = C.classify(raw_names)
     notes = []
     dropped = [n for n in raw_names if n not in mapping]
@@ -207,6 +214,11 @@ def select_channels(raw_names: list[str], rec: I.Recording):
                 excluded.add(raw_name)
         if excluded:
             notes.append(f"{len(excluded)} channel(s) marked bad in _channels.tsv: {', '.join(sorted(excluded))}")
+    off = [n for n in mapping if n not in excluded and set(mapping[n][1]) & set(exclude)]
+    if off:
+        notes.append(f"{len(off)} channel(s) on ear/mastoid or other EXCLUDE_CHANNELS electrodes left out: "
+                     f"{', '.join(mapping[n][0] for n in off)}")
+        excluded |= set(off)
     idx, names, contacts = [], [], {}
     for i, n in enumerate(raw_names):
         if n in mapping and n not in excluded:
@@ -271,7 +283,7 @@ def process(rec: I.Recording, wp: W.WindowParams, other: dict, out: Path, writer
         I.load_annotations(rec, raw)
     if sfreq < MIN_SFREQ:
         raise ValueError(f"sampling rate {sfreq:g} Hz is below {MIN_SFREQ:g} Hz")
-    idx, names, contacts, montage, reference, notes = select_channels(raw.ch_names, rec)
+    idx, names, contacts, montage, reference, notes = select_channels(raw.ch_names, rec, other["exclude_channels"])
     if montage == "as-recorded" and not rec.montage and sidecar_reference(rec) == "average":
         montage, reference = "average", "average"
     if len(idx) < 4:
@@ -308,7 +320,9 @@ def process(rec: I.Recording, wp: W.WindowParams, other: dict, out: Path, writer
             log.info("%s: %d of %d %s", rid, done, total, what)
             last_log[0] = time.monotonic()
 
-    # pass 1: epochs and rejection
+    # pass 1: epochs and rejection. The average reference here is over every selected channel; a
+    # channel the rejection then drops (flat or noisy in most epochs) is left out of the average in
+    # pass 2, so its noise can affect which epochs pass 1 rejects but not the estimates.
     ep = W.compute_epochs(read, sfreq, len(idx), intervals, wp, progress)
     try:
         rinfo = W.reject(ep, wp)
@@ -376,7 +390,14 @@ def process(rec: I.Recording, wp: W.WindowParams, other: dict, out: Path, writer
     band_names = [b[0] for b in bands]
 
     # tables
-    sides = [C.hemisphere(contacts[ch]) for ch in ch_names]
+    pairs = C.homologous_pairs(ch_names, contacts)
+    col = {ch: i for i, ch in enumerate(ch_names)}
+    hemi_left, hemi_right = [col[a] for a, _ in pairs], [col[b] for _, b in pairs]
+    paired = {a for a, _ in pairs} | {b for _, b in pairs}
+    unpaired = [ch for ch in ch_names if C.hemisphere(contacts[ch]) in ("L", "R") and ch not in paired]
+    if unpaired:
+        notes.append(f"hemisphere means use {len(pairs)} homologous pair(s); left out because their mirror channel "
+                     f"is missing: {', '.join(unpaired)}")
     iu = np.triu_indices(n_ch, 1)
     headline: dict = {"montage": montage, "n_channels": n_ch, "seconds_analysed": num(n_used * wp.epoch_s, 1),
                       "epochs_used": n_used, "epochs_rejected": int(rinfo.get("rejected_epochs", 0))}
@@ -395,7 +416,7 @@ def process(rec: I.Recording, wp: W.WindowParams, other: dict, out: Path, writer
             g = K.graph_metrics(v, other["density"], other["n_null"], other["seed"])
             for metric in K.GRAPH_METRICS:
                 writers["graph"].writerow([rid, band, m, metric, fmt(g[metric])])
-            h = K.hemisphere_summary(v, sides)
+            h = K.hemisphere_summary(v, hemi_left, hemi_right)
             writers["hemisphere"].writerow([rid, band, m, fmt(h["left"]), fmt(h["right"]),
                                             fmt(h["interhemispheric"]), fmt(h["asymmetry"])])
             w = K.weights(v)[iu]
@@ -427,7 +448,8 @@ def process(rec: I.Recording, wp: W.WindowParams, other: dict, out: Path, writer
             "channels": ch_names, "bands": {b[0]: [b[1], b[2]] for b in bands},
             "analysable_intervals_s": [[round(a, 3), round(b, 3)] for a, b in intervals],
             "seizures_excluded": len(rec.seizures) if other["exclude_seizure"] else 0,
-            "bad_segments": len(rec.bad), **rinfo, "epochs_used": n_used,
+            "bad_segments": len(rec.bad), **rinfo,
+            "hemisphere_pairs": [f"{a}/{b}" for a, b in pairs], "hemisphere_unpaired": unpaired, "epochs_used": n_used,
             "seconds_analysed": round(n_used * wp.epoch_s, 2),
             "notes": notes + rec.notes, "_headline": headline, "_figures": figs,
             "_asym": [(rid, band, headline[f"{primary}_{band}_asymmetry"]) for band in band_names]}
@@ -449,22 +471,23 @@ def make_figures(out: Path, rid, ch_names, contacts, arr, band_names, strengths,
         "Channels run from the left hemisphere (front to back) through the midline to the right hemisphere, so "
         "the top-left block is connectivity within the left hemisphere, the bottom-right block within the right, "
         "and the off-diagonal blocks between hemispheres. Brighter = more consistent phase lag between the two "
-        "channels; zero-lag coupling from volume conduction is not counted. A block that is brighter on one "
-        f"side than its mirror is a hemispheric asymmetry worth checking against the raw EEG. {bip}{F.RESEARCH}")})
+        "channels; zero-lag coupling from volume conduction is not counted. The figure describes the recording's "
+        "network; a difference between the left and right blocks is not a lateralising finding (on the demo data the "
+        f"side of the asymmetry did not match the side of the seizures better than chance). {bip}{F.RESEARCH}")})
     name = f"{rid}_edges.png"
     F.circles(figdir / name, rid, ch_names, contacts, mats, measure, top_edges, bipolar)
     figs.append({"path": f"figures/{name}", "caption": (
         f"{rid}: the {top_edges} strongest connections ({label}) per band, drawn on a circle with the left "
         "hemisphere on the left (frontal at the top), the right hemisphere mirrored on the right and midline "
         "channels at the bottom. Lines crossing the circle are interhemispheric; lines staying on one side are "
-        "within a hemisphere. Look for a cluster of strong lines around one region (for example one temporal "
-        f"lobe) that has no counterpart on the other side. {bip}{F.RESEARCH}")})
+        "within a hemisphere. The plot shows where the strongest connections of this recording are; a cluster on "
+        f"one side is a description of the sensor network, not a lateralising finding. {bip}{F.RESEARCH}")})
     name = f"{rid}_strength.png"
     if F.strength_topomaps(figdir / name, rid, ch_names, contacts, strengths, measure, bipolar):
         figs.append({"path": f"figures/{name}", "caption": (
             f"{rid}: node strength per band, the mean {label} of each channel with every other channel, on a scalp "
-            "map. A focal hot spot means that channel is more synchronised with the rest of the scalp than its "
-            "neighbours; compare the two hemispheres and the region of any suspected focus. Values are relative "
+            "map. A hot spot means that channel is more synchronised with the rest of the scalp than its neighbours. "
+            "Left-right differences in node strength are not a lateralising finding. Values are relative "
             "within the recording (colour scale per band). "
             + ("Bipolar pairs are drawn at the midpoint of their two electrodes. " if bipolar else "") + F.RESEARCH)})
     return figs
@@ -553,11 +576,12 @@ def main() -> int:
                 figures.insert(0, {"path": "figures/asymmetry_overview.png", "caption": (
                     f"Hemispheric asymmetry of connectivity ({K.MEASURE_LABEL[primary]}) for every recording "
                     "(rows) and band (columns): (left - right) / (left + right) of the mean connectivity within "
-                    "each hemisphere, midline channels left out. Red: more connectivity within the left hemisphere; "
-                    "blue: within the right. This is a sensor-level proxy of the source-level network asymmetry "
-                    "studied for lateralising temporal lobe epilepsy (Verhoeven et al. 2018); it has not been "
-                    f"validated for lateralisation. Consistent colour across a patient's recordings is more "
-                    f"telling than a single value. {F.RESEARCH}")})
+                    "each hemisphere, over homologous channel pairs present on both sides (midline left out). Red: "
+                    "more connectivity within the left hemisphere; blue: within the right. This describes the "
+                    "sensor-level network; it is not a lateralising finding. It is a sensor-level proxy of the "
+                    "source-level network asymmetry studied in temporal lobe epilepsy (Verhoeven et al. 2018), and "
+                    "on the Siena demo data its sign matched the side of the annotated seizures only at chance "
+                    f"level. {F.RESEARCH}")})
         except Exception as e:  # noqa: BLE001
             log.warning("asymmetry overview figure failed: %s", e)
 
@@ -568,7 +592,7 @@ def main() -> int:
             "measures": list(other["measures"]), "bands": {n: [lo, hi] for n, lo, hi in other["bands"]},
             "epoch_s": wp.epoch_s, "spectral": "mne-connectivity spectral_connectivity_epochs, multitaper "
             "(default bandwidth), faverage", "envelope": "4th-order Butterworth band-pass (zero phase), Hilbert, "
-            "mne-connectivity envelope_correlation(orthogonalize='pairwise'), weighted mean over chunks",
+            "mne-connectivity envelope_correlation(orthogonalize='pairwise', log=True), weighted mean over chunks",
             "graph": {"threshold": "proportional", "density": other["density"], "n_null": other["n_null"],
                       "null": "degree-preserving double edge swaps, weights shuffled", "seed": other["seed"]},
             "reject": wp.reject, "reject_uv": wp.reject_uv, "flat_uv": W.FLAT_UV, "robust_z": W.ROBUST_Z,
@@ -584,14 +608,16 @@ def main() -> int:
         json.dump(provenance, fh, indent=2, ensure_ascii=False)
     tables = [
         {"path": "connectivity.csv", "caption": "Connectivity of every channel pair per band and measure (wpli 0-1; "
-                                                "imcoh signed, -1 to 1; aec 0-1)."},
+                                                "imcoh signed, -1 to 1, negative when channel_a leads channel_b; "
+                                                "aec 0-1)."},
         {"path": "node_strength.csv", "caption": "Node strength: mean |connectivity| of each channel with every other "
                                                  "channel, per band and measure."},
         {"path": "graph.csv", "caption": f"Graph measures of the proportionally thresholded network (density "
                                          f"{other['density']:g}): weighted clustering, characteristic path length, "
                                          "global efficiency, Louvain modularity, small-worldness against "
                                          "degree-preserving null networks, density."},
-        {"path": "hemisphere.csv", "caption": "Mean |connectivity| within the left hemisphere, within the right, "
+        {"path": "hemisphere.csv", "caption": "Mean |connectivity| within the left hemisphere, within the right "
+                                              "(over homologous channel pairs present on both sides), "
                                               "between them, and the asymmetry (left - right)/(left + right)."},
         {"path": "features.csv", "caption": "Node strength per channel in the shared long shape (feature "
                                             "<measure>_<band>)."},

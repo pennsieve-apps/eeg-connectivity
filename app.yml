@@ -123,6 +123,14 @@ parameters:
       (a cap on the run time of very long recordings).
     defaultValue: 0
     min: 0
+  - name: EXCLUDE_CHANNELS
+    type: string
+    label: Channels left out
+    description: >-
+      Comma-separated electrodes left out of every estimate, with any bipolar pair that contains
+      them: by default the ear and mastoid electrodes (A1, A2, M1, M2), which are reference sites
+      rather than scalp positions. none = keep every EEG channel.
+    defaultValue: "A1,A2,M1,M2"
   - name: FIGURES
     type: boolean
     label: Figures

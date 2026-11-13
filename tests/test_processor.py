@@ -273,7 +273,8 @@ def test_no_input_exit_1(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("env", [{"MEASURES": "coherence"}, {"BANDS": "{bad"}, {"DENSITY": "0"},
                                  {"DENSITY": "1.5"}, {"REJECT": "maybe"}, {"THREADS": "x"}, {"EPOCH_S": "0.5"},
-                                 {"N_NULL": "-1"}, {"BANDS": '{"slow": [0.2, 1]}'}, {"LABEL": "a/b"}])
+                                 {"N_NULL": "-1"}, {"BANDS": '{"slow": [0.2, 1]}'}, {"LABEL": "a/b"},
+                                 {"EXCLUDE_CHANNELS": "X9"}])
 def test_bad_parameters_exit_2(fixture, tmp_path, monkeypatch, env):
     assert run(monkeypatch, fixture / "loose", tmp_path, **env) == 2
 
@@ -328,7 +329,7 @@ def test_proportional_threshold_and_hemisphere():
     assert (np.triu(a, 1) > 0).sum() == 9 and a.max() == pytest.approx(1.0)
     # 2 left, 2 right, 1 midline
     v = np.array([[0, .8, .1, .1, 0], [.8, 0, .1, .1, 0], [.1, .1, 0, .2, 0], [.1, .1, .2, 0, 0], [0] * 5], float)
-    h = K.hemisphere_summary(v, ["L", "L", "R", "R", "Z"])
+    h = K.hemisphere_summary(v, [0, 1], [2, 3])
     assert h["left"] == pytest.approx(0.8) and h["right"] == pytest.approx(0.2)
     assert h["interhemispheric"] == pytest.approx(0.1) and h["asymmetry"] == pytest.approx(0.6)
     assert K.node_strength(v)[0] == pytest.approx((0.8 + 0.1 + 0.1) / 4)
@@ -356,3 +357,65 @@ def test_display_order():
     names = ["Fz", "O2", "Fp1", "T7", "Fp2", "O1"]
     contacts = {n: (n,) for n in names}
     assert C.display_order(names, contacts) == ["Fp1", "T7", "O1", "Fz", "Fp2", "O2"]
+
+
+def test_imcoh_sign_negative_when_channel_a_leads():
+    """connectivity.csv lists each pair once (channel_a before channel_b in the recording's channel order);
+    imcoh is negative when channel_a leads."""
+    rng = np.random.default_rng(5)
+    fs, n, lag = 256.0, 256 * 200, 8
+    src = make_fixture.bandnoise(n + lag, rng, 8, 12, 10.0)
+    a = src[lag:] + rng.normal(0, 3, n)          # a(t) = s(t + lag): a leads
+    b = src[:n] + rng.normal(0, 3, n)
+    c = rng.normal(0, 3, n)
+    x = np.stack([a, b, c])
+    ep = (x[:, i:i + 1024] for i in range(0, n - 1024 + 1, 1024))
+    m = K.spectral_measures(ep, fs, 3, [("alpha", 8.0, 13.0)], ("imcoh",))["imcoh"][:, :, 0]
+    assert m[0, 1] < -0.3                         # row 0 = channel_a (leader), column 1 = channel_b
+    ep = (x[[1, 0, 2], i:i + 1024] for i in range(0, n - 1024 + 1, 1024))
+    m = K.spectral_measures(ep, fs, 3, [("alpha", 8.0, 13.0)], ("imcoh",))["imcoh"][:, :, 0]
+    assert m[0, 1] > 0.3                          # follower listed first: positive
+
+
+def test_hemisphere_uses_homologous_pairs_only(fixture, tmp_path, monkeypatch, truth):
+    """A channel bad on one side (T7) takes its mirror (T8) out of the hemisphere means."""
+    import shutil
+
+    inp = tmp_path / "eeg"
+    shutil.copytree(fixture / "eeg", inp)
+    for ch in inp.rglob("*SYN01*_channels.tsv"):
+        lines = ch.read_text().splitlines()
+        lines = [l.replace("\tgood\t", "\tbad\t") if l.startswith("T7\t") else l for l in lines]
+        ch.write_text("\n".join(lines) + "\n")
+    assert run(monkeypatch, inp, tmp_path / "out", FIGURES="false") == 0
+    rec = json.loads((tmp_path / "out" / "eeg-connectivity" / "provenance.json").read_text())["recordings"][
+        truth["SYN01"]["recording_id"]]
+    assert rec["hemisphere_unpaired"] == ["T8"] and "T7/T8" not in rec["hemisphere_pairs"]
+    assert len(rec["hemisphere_pairs"]) == 7 and any("mirror channel is missing" in n for n in rec["notes"])
+
+
+def test_ear_electrodes_left_out(tmp_path, monkeypatch):
+    from edfio import Edf, EdfSignal
+
+    rng = np.random.default_rng(2)
+    el = make_fixture.electrodes(120.0, rng)
+    el["A1"], el["A2"] = rng.normal(0, 15, len(el["Fp1"])), rng.normal(0, 15, len(el["Fp1"]))
+    inp = tmp_path / "in"
+    inp.mkdir()
+    Edf([EdfSignal(v, sampling_frequency=make_fixture.FS, label=k, physical_dimension="uV",
+                   physical_range=(-500, 500)) for k, v in el.items()]).write(inp / "ears_01.edf")
+    assert run(monkeypatch, inp, tmp_path / "out", FIGURES="false") == 0
+    rec = json.loads((tmp_path / "out" / "eeg-connectivity" / "provenance.json").read_text())["recordings"][
+        "sub-ears_task-eeg_run-01"]
+    assert "A1" not in rec["channels"] and "A2" not in rec["channels"] and len(rec["channels"]) == 19
+    assert any("ear/mastoid" in n for n in rec["notes"])
+    assert run(monkeypatch, inp, tmp_path / "out2", FIGURES="false", EXCLUDE_CHANNELS="none") == 0
+    rec = json.loads((tmp_path / "out2" / "eeg-connectivity" / "provenance.json").read_text())["recordings"][
+        "sub-ears_task-eeg_run-01"]
+    assert "A1" in rec["channels"]
+
+
+def test_homologous_pairs_accept_reversed_bipolar_mirror():
+    names = ["T7-FT9", "FT10-T8", "Fp1-F7", "Fp2-F8", "Fz-Cz"]
+    contacts = {n: tuple(n.split("-")) for n in names}
+    assert C.homologous_pairs(names, contacts) == [("T7-FT9", "FT10-T8"), ("Fp1-F7", "Fp2-F8")]

@@ -4,13 +4,14 @@ summary.
 
 Measures (MEASURES):
 - `wpli`: weighted phase lag index (Vinck et al. 2011), and `imcoh`: imaginary part of coherency
-  (Nolte et al. 2004), both from mne-connectivity's `spectral_connectivity_epochs` (multitaper,
-  default bandwidth: 7 DPSS tapers on 4 s epochs, ±1 Hz smoothing), averaged over the bins of
-  each band (`faverage`). Both ignore the zero-lag (real) part of the cross-spectrum, which is
-  what volume conduction and a shared reference produce.
+  (Nolte et al. 2004; in connectivity.csv a negative value means channel_a leads channel_b), both
+  from mne-connectivity's `spectral_connectivity_epochs` (multitaper, default bandwidth: 7 DPSS
+  tapers on 4 s epochs, ±1 Hz smoothing), averaged over the bins of each band (`faverage`). Both
+  ignore the zero-lag (real) part of the cross-spectrum, which is what volume conduction and a
+  shared reference produce.
 - `aec`: orthogonalised amplitude envelope correlation (Hipp et al. 2012), from
-  mne-connectivity's `envelope_correlation(orthogonalize="pairwise")` on the analytic signal of
-  the band-passed EEG (4th-order Butterworth, zero phase, applied to each chunk of continuous
+  mne-connectivity's `envelope_correlation(orthogonalize="pairwise", log=True)` (correlation of the
+  log power envelopes, as Hipp et al. did) on the analytic signal of the band-passed EEG (4th-order Butterworth, zero phase, applied to each chunk of continuous
   analysable EEG, then Hilbert). Correlations are taken over the kept epochs of each chunk
   (CHUNK_S) and averaged over chunks, weighted by their length.
 
@@ -112,7 +113,7 @@ class EnvelopeAccumulator:
             z = hilbert(sosfiltfilt(sos, x, axis=-1), axis=-1)[:, sel]
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                c = envelope_correlation(z[np.newaxis], orthogonalize="pairwise", verbose="error")
+                c = envelope_correlation(z[np.newaxis], orthogonalize="pairwise", log=True, verbose="error")
             self.sum[:, :, b] += np.asarray(c.get_data(output="dense"), float).reshape(x.shape[0], x.shape[0]) * len(sel)
         self.weight += len(sel)
 
@@ -143,12 +144,13 @@ def node_strength(values: np.ndarray) -> np.ndarray:
     return w.sum(axis=1) / max(1, n - 1)
 
 
-def hemisphere_summary(values: np.ndarray, sides: list[str]) -> dict[str, float]:
+def hemisphere_summary(values: np.ndarray, left: list[int], right: list[int]) -> dict[str, float]:
     """Mean |connectivity| within the left channels, within the right channels, and between left
-    and right; asymmetry = (left - right) / (left + right). Midline channels are left out."""
+    and right; asymmetry = (left - right) / (left + right). `left` and `right` are matched
+    homologous channels (left[k] mirrors right[k], channels.homologous_pairs), so both sides are
+    averaged over the same set of electrode positions; midline and unpaired channels are left out."""
     w = weights(values)
-    s = np.asarray(sides)
-    L, R = np.flatnonzero(s == "L"), np.flatnonzero(s == "R")
+    L, R = np.asarray(left, int), np.asarray(right, int)
 
     def within(ix):
         if len(ix) < 2:
@@ -156,11 +158,11 @@ def hemisphere_summary(values: np.ndarray, sides: list[str]) -> dict[str, float]
         sub = w[np.ix_(ix, ix)]
         return float(sub[np.triu_indices(len(ix), 1)].mean())
 
-    left, right = within(L), within(R)
+    lv, rv = within(L), within(R)
     inter = float(w[np.ix_(L, R)].mean()) if len(L) and len(R) else math.nan
-    tot = left + right
-    asym = (left - right) / tot if math.isfinite(tot) and tot > 0 else math.nan
-    return {"left": left, "right": right, "interhemispheric": inter, "asymmetry": asym}
+    tot = lv + rv
+    asym = (lv - rv) / tot if math.isfinite(tot) and tot > 0 else math.nan
+    return {"left": lv, "right": rv, "interhemispheric": inter, "asymmetry": asym}
 
 
 # --------------------------------------------------------------------------- graphs
