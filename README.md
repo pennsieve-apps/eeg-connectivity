@@ -85,7 +85,8 @@ extractor in that direction, not a reimplementation.
 5. **wPLI and imaginary coherence** (MNE-Connectivity `spectral_connectivity_epochs`, multitaper
    with its default bandwidth: 7 DPSS tapers, ±1 Hz smoothing on 4 s epochs), averaged over the
    frequency bins of each band. wPLI (0–1) is |E[Im S<sub>xy</sub>]| / E[|Im S<sub>xy</sub>|] over
-   epochs and tapers: 1 = the phase of one channel consistently leads the other. imcoh is the
+   epochs (each epoch's cross-spectrum averaged over the tapers first, as MNE-Connectivity does):
+   1 = the phase of one channel consistently leads the other. imcoh is the
    imaginary part of the coherency (signed, −1 to 1; the sign is the direction of the lag). The
    epochs are streamed through the estimator one at a time, so memory does not grow with the
    recording.
