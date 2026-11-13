@@ -48,7 +48,7 @@ parameters:
     description: >-
       Comma-separated connectivity measures: wpli (weighted phase lag index), imcoh (imaginary part
       of coherency), aec (orthogonalised amplitude envelope correlation), or all. The first one is
-      shown in the figures and the summary. wpli alone is the fastest; aec roughly triples the run time.
+      shown in the figures and the summary. wpli alone is the fastest; aec makes a run three to four times longer.
     defaultValue: wpli
   - name: BANDS
     type: string
