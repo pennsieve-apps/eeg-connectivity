@@ -274,7 +274,8 @@ lists in `CITATION.cff`.
 - Verhoeven T et al. Automated diagnosis of temporal lobe epilepsy in the absence of interictal
   spikes. *NeuroImage: Clinical* 17:10–15 (2018). doi:10.1016/j.nicl.2017.09.021, PMID 29527470
   (10.1016/j.nicl.2017.09.021).
-- Gramfort A et al. MEG and EEG data analysis with MNE-Python. *Frontiers in Neuroscience* 7:267
+- Gramfort A, Luessi M, Larson E, Engemann DA, Strohmeier D, Brodbeck C, Goj R, Jas M, Brooks T,
+  Parkkonen L, Hämäläinen M. MEG and EEG data analysis with MNE-Python. *Frontiers in Neuroscience* 7:267
   (2013). doi:10.3389/fnins.2013.00267, PMID 24431986 (10.3389/fnins.2013.00267).
 - Hagberg AA, Schult DA, Swart PJ. Exploring Network Structure, Dynamics, and Function using
   NetworkX. *Proceedings of the 7th Python in Science Conference (SciPy 2008)*, 11–15 (2008).
