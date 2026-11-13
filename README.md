@@ -170,15 +170,17 @@ and, with `aec`, the band-pass filters (three to four times the wPLI-only time).
 | Synthetic fixture, Lambda-style (`--cpus 1`, read-only, uid 65534) | all | 2 (6 and 4 min) | 21 s | 312 MB |
 | eeg-prep's Siena derivative, sub-00 (`--cpus 2 --memory 3g`) | wpli | 5 runs, 35-44 min | 16 s | 332 MB |
 | the same | all | 5 runs | 70 s | 332 MB |
-| eeg-prep's Siena derivative, all of it | all | 41 runs, 0.6-13.5 h, 41 ok | 1760 s | 870 MB |
-| one 13.5 h run of it (sub-01 run-00, 19 channels, 256 Hz) | all | 1 | 159 s | (within the above) |
-| CHB-MIT chb01_01/03/04, raw bipolar EDF + summary | all | 3 x 1 h | 62 s | 342 MB |
-| OpenNeuro ds003555 sub-01..03, 3 h sleep EEG at 1024 Hz | all | 3 | 422 s (89-185 s each) | 540 MB |
+| eeg-prep's Siena derivative, all of it (`--memory 2g`, four other apps running) | all | 41 runs, 0.6-13.5 h, 41 ok | 2472 s | 793 MB |
+| one 13.5 h run of it (sub-01 run-00, 19 channels, 256 Hz) | all | 1 | 176 s | (within the above) |
+| eeg-prep's CHB-MIT chb01 derivative (`--memory 2g`) | wpli | 42 x 1 h, 42 ok | 263 s | 396 MB |
+| eeg-prep's ds003555 derivative, 3 h sleep EEG (`--memory 2g`) | wpli | 3, 3 ok | 63 s | 936 MB |
+| CHB-MIT chb01_01/03/04, raw bipolar EDF + summary (first build) | all | 3 x 1 h | 62 s | 342 MB |
+| OpenNeuro ds003555 sub-01..03, raw BIDS at 1024 Hz (first build) | all | 3 | 422 s (89-185 s each) | 540 MB |
 
 The cgroup peak includes the page cache of the EDF being read. The app is sized at **1 vCPU,
 2 GB** with a **2 h** timeout: a step gets every recording of its input, and a dataset of
 long-term recordings (the 41 Siena runs, 128 h of EEG) takes about half an hour under emulation
-with all measures; a single routine EEG takes seconds.
+with all measures (30-40 min with other jobs sharing the machine); a single routine EEG takes seconds.
 
 What it found:
 
@@ -190,25 +192,27 @@ What it found:
   variant the strongest theta edge links a T7-containing and an O1-containing pair (wPLI 0.91).
   With `EXCLUDE_SEIZURE=false` the planted right-hemisphere seizure raises right theta wPLI, so
   leaving seizures out matters.
-- **Siena** (eeg-prep derivative, 41 runs of 14 adults with focal epilepsy): 2 % of epochs
-  rejected in the median run (24 % in the worst); median wPLI over all pairs 0.21 in theta and
-  0.22 in alpha, 0.13-0.18 in the other bands; wPLI small-worldness 0.3-2.0 (median about 0.85-1.1
-  by band), i.e. thresholded 19-channel sensor networks are not clearly small-world.
+- **Siena** (eeg-prep derivative, 41 runs of 14 adults with focal epilepsy): 2.8 % of epochs
+  rejected in the median run (42 % in the worst); median wPLI over all pairs 0.21 in theta and
+  0.22 in alpha, 0.12-0.18 in the other bands; wPLI small-worldness 0-2.5 (median 0.89), i.e.
+  thresholded 19-channel sensor networks are not clearly small-world.
 - **Exploratory lateralisation check on Siena** (not a validation): for the 13 patients whose
   annotated seizure channels are on one side (9 left, 4 right; sub-10 bilateral), the sign of the
   mean within-hemisphere asymmetry per patient matched the seizure side in 4-8 of 13 patients
-  depending on measure and band (wPLI: delta 5, theta 4, alpha 4, beta 6, gamma 7; imcoh 4-8;
-  aec 5-7): **chance level**. The sensor-level asymmetry does not lateralise these patients, and
+  depending on measure and band (wPLI: delta 5, theta 4, alpha 4, beta 7, gamma 7; imcoh 4-8;
+  aec 6-7): **chance level**. The sensor-level asymmetry does not lateralise these patients, and
   must not be read as a lateralising sign.
-- **CHB-MIT chb01** (bipolar only): runs with the bipolar warning; 21 of 23 derivations used (the
-  reversed duplicate `P7-T7` and the `T8-P8-1` copy left out); on these raw, unfiltered files 13-50 %
-  of epochs were rejected (eye blinks in the frontal derivations; chb01_01 also lost Fp1-F7 and
-  Fp1-F3 as noisy in most epochs). Run eeg-prep first on raw clinical data.
-- **ds003555**: EDFs without a physical dimension are read as µV and re-referenced to the average
-  (noted per recording); sub-01 lost Pz and 65 % of its epochs to artifacts.
+- **CHB-MIT chb01** (eeg-prep derivative of all 42 hours, bipolar only): 42 of 42 ok with the
+  bipolar warning, 21 derivations (eeg-prep drops the reversed duplicate `P7-T7` and the `T8-P8-1`
+  copy). 36 % of epochs rejected in the median hour (67 % in the worst): eeg-prep cannot run ICA on
+  bipolar-only data (no electrode positions), so eye blinks in the frontal derivations remain and
+  exceed `REJECT_UV` or the muscle test; some hours also lose Fp1-F7 and Fp1-F3 as noisy.
+- **ds003555** (eeg-prep derivative): 3 of 3 ok in average reference; 2.5 % of epochs rejected in the
+  median child, 63 % in sub-01 (artifact-rich; on the raw files it also lost Pz).
 
 Outputs on the demo data are in
-`workflow-scalp-eeg/data/work/{siena,chbmit,ds003555}/eeg-connectivity/` (all measures).
+`workflow-scalp-eeg/data/work/{siena,chbmit,ds003555}/eeg-connectivity/`, all on eeg-prep's
+final derivatives (Siena with all measures, CHB-MIT and ds003555 with the default wPLI).
 
 ## Limitations
 
